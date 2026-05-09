@@ -803,8 +803,3 @@ fvm flutter pub get
 4. Push: `git push origin feature/your-feature`
 5. Open a Pull Request
 
----
-
-## 📄 License
-
-MIT — see [LICENSE](LICENSE) for details.
