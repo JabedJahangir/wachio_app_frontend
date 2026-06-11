@@ -7,6 +7,7 @@ import 'package:flutter_riverpod_template/constant/app_asserts_image_path.dart';
 import 'package:flutter_riverpod_template/constant/app_colors.dart';
 import 'package:flutter_riverpod_template/utils/app_log.dart';
 import 'package:skeletonizer/skeletonizer.dart';
+import 'package:vector_math/vector_math_64.dart' show Vector3, Quaternion;
 
 class AppImage extends StatelessWidget {
   const AppImage({
@@ -14,20 +15,20 @@ class AppImage extends StatelessWidget {
     this.color,
     this.fit = BoxFit.cover,
     this.height,
-    this.path,
-    this.url,
+    this.path = "",
+    this.url = "",
     this.width,
-    this.filePath,
+    this.filePath = "",
     this.iconColor,
     this.isZomBle = false,
     this.placeholder,
     this.networkPlaceholderImage,
   });
 
-  final String? path;
+  final String path;
   final String? networkPlaceholderImage;
-  final String? filePath;
-  final String? url;
+  final String filePath;
+  final String url;
   final BoxFit? fit;
   final double? width;
   final double? height;
@@ -39,7 +40,7 @@ class AppImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // File image
-    if (filePath != null) {
+    if (filePath.isNotEmpty) {
       return GestureDetector(
         onTap: isZomBle
             ? () {
@@ -47,15 +48,12 @@ class AppImage extends StatelessWidget {
                   _showFullScreenImage(
                     context,
                     Image.file(
-                      File(filePath!),
+                      File(filePath),
                       width: width,
                       height: height,
                       fit: fit,
                       errorBuilder: (context, error, stackTrace) {
-                        errorLog(
-                          "Error loading file image: $error",
-                          stackTrace,
-                        );
+                        errorLog("Error loading file image: $error", stackTrace);
                         return _errorPlaceholder();
                       },
                     ),
@@ -64,7 +62,7 @@ class AppImage extends StatelessWidget {
               }
             : null,
         child: Image.file(
-          File(filePath!),
+          File(filePath),
           width: width,
           height: height,
           fit: fit,
@@ -77,36 +75,21 @@ class AppImage extends StatelessWidget {
     }
 
     // Network image
-    if (url != null && url!.isNotEmpty) {
+    if (url.isNotEmpty) {
       return GestureDetector(
         onTap: isZomBle
             ? () {
                 if (isZomBle) {
-                  _showFullScreenImage(
-                    context,
-                    NetworkImageWithRetry(
-                      key: UniqueKey(),
-                      imageUrl: url!,
-                      width: width,
-                      height: height,
-                      fit: fit,
-                    ),
-                  );
+                  _showFullScreenImage(context, NetworkImageWithRetry(key: UniqueKey(), imageUrl: url, width: width, height: height, fit: fit));
                 }
               }
             : null,
-        child: NetworkImageWithRetry(
-          key: UniqueKey(),
-          imageUrl: url!,
-          width: width,
-          height: height,
-          fit: fit,
-        ),
+        child: NetworkImageWithRetry(key: UniqueKey(), imageUrl: url, width: width, height: height, fit: fit),
       );
     }
 
     // Asset image
-    if (path != null) {
+    if (path.isNotEmpty) {
       return GestureDetector(
         onTap: isZomBle
             ? () {
@@ -114,16 +97,13 @@ class AppImage extends StatelessWidget {
                   _showFullScreenImage(
                     context,
                     Image.asset(
-                      path!,
+                      path,
                       width: width,
                       height: height,
                       fit: fit,
                       color: iconColor,
                       errorBuilder: (context, error, stackTrace) {
-                        errorLog(
-                          "Error loading asset image: $error",
-                          stackTrace,
-                        );
+                        errorLog("Error loading asset image: $error", stackTrace);
                         return _errorPlaceholder();
                       },
                     ),
@@ -132,7 +112,7 @@ class AppImage extends StatelessWidget {
               }
             : null,
         child: Image.asset(
-          path!,
+          path,
           width: width,
           height: height,
           fit: fit,
@@ -151,8 +131,7 @@ class AppImage extends StatelessWidget {
       height: height,
       color: color ?? AppColors.instance.white200,
       child: Image.asset(
-        networkPlaceholderImage ??
-            AppAssertsImagePath.instance.networkPlaceholderImage,
+        networkPlaceholderImage ?? AppAssertsImagePath.instance.networkPlaceholderImage,
         width: width,
         height: height,
         fit: fit,
@@ -175,114 +154,7 @@ class AppImage extends StatelessWidget {
   }
 
   void _showFullScreenImage(BuildContext context, Widget imageWidget) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FullScreenImageViewer(image: imageWidget),
-      ),
-    );
-  }
-}
-
-class FullScreenImageViewer extends StatefulWidget {
-  final Widget image;
-
-  const FullScreenImageViewer({super.key, required this.image});
-
-  @override
-  State<FullScreenImageViewer> createState() => _FullScreenImageViewerState();
-}
-
-class _FullScreenImageViewerState extends State<FullScreenImageViewer>
-    with SingleTickerProviderStateMixin {
-  late AnimationController animationController;
-  Animation<Matrix4>? zoomAnimation;
-  late TransformationController transformationController;
-  TapDownDetails? doubleTapDetails;
-  void onAppInitial() {
-    try {
-      transformationController = TransformationController();
-
-      animationController =
-          AnimationController(
-            vsync: this,
-            duration: const Duration(milliseconds: 300),
-          )..addListener(() {
-            transformationController.value = zoomAnimation!.value;
-          });
-    } catch (e) {
-      errorLog("onAppInitial", e);
-    }
-  }
-
-  void handleDoubleTapDown(TapDownDetails details) {
-    doubleTapDetails = details;
-  }
-
-  void handleDoubleTap() {
-    final newValue = transformationController.value.isIdentity()
-        ? _applyZoom()
-        : _revertZoom();
-
-    zoomAnimation = Matrix4Tween(
-      begin: transformationController.value,
-      end: newValue,
-    ).animate(CurveTween(curve: Curves.ease).animate(animationController));
-    animationController.forward(from: 0);
-  }
-
-  Matrix4 _applyZoom() {
-    final tapPosition = doubleTapDetails!.localPosition;
-    final zoomed = Matrix4.identity()
-      ..translateByDouble(-tapPosition.dx, -tapPosition.dy, 0.0, 0.0)
-      ..scaleByDouble(2.0, 2.0, 1.0, 1.0);
-    return zoomed;
-  }
-
-  Matrix4 _revertZoom() => Matrix4.identity();
-
-  void appClose() {
-    try {
-      transformationController.dispose();
-      animationController.dispose();
-    } catch (e) {
-      errorLog("appClose", e);
-    }
-  }
-
-  @override
-  void initState() {
-    onAppInitial();
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    appClose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: GestureDetector(
-        onDoubleTapDown: handleDoubleTapDown,
-        onDoubleTap: handleDoubleTap,
-        child: InteractiveViewer(
-          transformationController: transformationController,
-          child: Center(child: widget.image),
-        ),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (context) => FullScreenImageViewer(image: imageWidget)));
   }
 }
 
@@ -292,20 +164,13 @@ class NetworkImageWithRetry extends StatefulWidget {
   final double? height;
   final BoxFit? fit;
 
-  const NetworkImageWithRetry({
-    super.key,
-    required this.imageUrl,
-    this.fit,
-    this.height,
-    this.width,
-  });
+  const NetworkImageWithRetry({super.key, required this.imageUrl, this.fit, this.height, this.width});
 
   @override
   State<NetworkImageWithRetry> createState() => _NetworkImageWithRetryState();
 }
 
-class _NetworkImageWithRetryState extends State<NetworkImageWithRetry>
-    with AutomaticKeepAliveClientMixin {
+class _NetworkImageWithRetryState extends State<NetworkImageWithRetry> with AutomaticKeepAliveClientMixin {
   int retryCount = 0;
   final int maxRetries = 2;
   late String _image;
@@ -352,9 +217,7 @@ class _NetworkImageWithRetryState extends State<NetworkImageWithRetry>
             });
           }
         });
-      } else {
-        appLog("Max retries reached for image: $_image");
-      }
+      } else {}
     } catch (e) {
       errorLog("_retry", e);
     }
@@ -388,10 +251,7 @@ class _NetworkImageWithRetryState extends State<NetworkImageWithRetry>
         width: widget.width ?? double.infinity,
         height: widget.height,
         color: AppColors.instance.white300,
-        child: Image.asset(
-          AppAssertsImagePath.instance.networkPlaceholderImage,
-          fit: BoxFit.fill,
-        ),
+        child: Image.asset(AppAssertsImagePath.instance.networkPlaceholderImage, fit: BoxFit.fill),
       ),
     );
   }
@@ -401,10 +261,7 @@ class _NetworkImageWithRetryState extends State<NetworkImageWithRetry>
       width: widget.width,
       height: widget.height,
       color: Colors.grey,
-      child: Image.asset(
-        AppAssertsImagePath.instance.networkPlaceholderImage,
-        fit: BoxFit.fill,
-      ),
+      child: Image.asset(AppAssertsImagePath.instance.networkPlaceholderImage, fit: BoxFit.fill),
     );
   }
 
@@ -431,4 +288,129 @@ class CustomCacheManager extends CacheManager {
 
 String optimizedImageUrl(String url, {int width = 600, int height = 600}) {
   return "$url?width=$width&height=$height";
+}
+
+class FullScreenImageViewer extends StatefulWidget {
+  final Widget image;
+
+  const FullScreenImageViewer({super.key, required this.image});
+
+  @override
+  State<FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<FullScreenImageViewer> with SingleTickerProviderStateMixin {
+  late AnimationController animationController;
+  Animation<Matrix4>? zoomAnimation;
+  late TransformationController transformationController;
+  TapDownDetails? doubleTapDetails;
+  void onAppInitial() {
+    try {
+      transformationController = TransformationController();
+
+      animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300))
+        ..addListener(() {
+          transformationController.value = zoomAnimation!.value;
+        });
+    } catch (e) {
+      errorLog("onAppInitial", e);
+    }
+  }
+
+  void handleDoubleTapDown(TapDownDetails details) {
+    doubleTapDetails = details;
+  }
+
+  void handleDoubleTap() {
+    final newValue = transformationController.value.isIdentity() ? _applyZoom() : _revertZoom();
+
+    zoomAnimation = Matrix4Tween(
+      begin: transformationController.value,
+      end: newValue,
+    ).animate(CurveTween(curve: Curves.ease).animate(animationController));
+    animationController.forward(from: 0);
+  }
+
+  // Matrix4 _applyZoom() {
+  //   final tapPosition = doubleTapDetails!.localPosition;
+  //   final zoomed = Matrix4.identity()
+  //     ..translateByDouble(-tapPosition.dx / 2, -tapPosition.dy / 2, 0.0, 0.0)
+  //     ..scaleByDouble(2.0, 2.0, 1.0, 1.0);
+  //   return zoomed;
+  // }
+
+  Matrix4 _applyZoom() {
+    if (doubleTapDetails == null) return Matrix4.identity();
+
+    final tapPosition = doubleTapDetails!.localPosition;
+    const double zoomScale = 2.5;
+
+    // Calculate where the center of the viewport is
+    final Size size = MediaQuery.of(context).size;
+    final double centerX = size.width / 2;
+    final double centerY = size.height / 2;
+
+    // Calculate how much we need to shift to bring the tapped point to the center
+    final double translationX = centerX - (tapPosition.dx * zoomScale);
+    final double translationY = centerY - (tapPosition.dy * zoomScale);
+
+    // Build the matrix cleanly using explicit vector positions
+    return Matrix4.compose(
+      Vector3(translationX, translationY, 0.0), // Translation matrix vector
+      Quaternion.identity(), // No rotation
+      Vector3(zoomScale, zoomScale, 1.0), // Scale matrix vector
+    );
+  }
+
+  Matrix4 _revertZoom() => Matrix4.identity();
+
+  void appClose() {
+    try {
+      transformationController.dispose();
+      animationController.dispose();
+    } catch (e) {
+      errorLog("appClose", e);
+    }
+  }
+
+  @override
+  void initState() {
+    onAppInitial();
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    appClose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: GestureDetector(
+        onDoubleTapDown: handleDoubleTapDown,
+        onDoubleTap: handleDoubleTap,
+        child: InteractiveViewer(
+          scaleEnabled: true,
+          panEnabled: true,
+
+          transformationController: transformationController,
+          minScale: 1.0,
+          maxScale: 10.0,
+
+          child: Center(child: widget.image),
+        ),
+      ),
+    );
+  }
 }
